@@ -1,5 +1,5 @@
 name: sukoon
-description: A professional task manager built with Flutter.
+description: A professional task manager
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -10,6 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
   shared_preferences: ^2.2.2
+  just_audio: ^0.9.36
+  adhan: ^2.0.0+1
+  geolocator: ^10.1.0
+  intl: ^0.19.0
 
 flutter:
   uses-material-design: true
