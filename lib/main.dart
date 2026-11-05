@@ -4,214 +4,183 @@ import 'package:just_audio/just_audio.dart';
 import 'package:adhan/adhan.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:convert';
 
-void main() => runApp(SukoonApp());
+final FlutterLocalNotificationsPlugin notificationsPlugin = FlutterLocalNotificationsPlugin();
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  tzdata.initializeTimeZones();
+  const androidInit = AndroidInitializationSettings('@mipmap/launcher_icon');
+  await notificationsPlugin.initialize(InitializationSettings(android: androidInit));
+  runApp(SukoonApp());
+}
+
+Future<void> schedulePrayerNotification(DateTime time, String name, int id) async {
+  if (time.isBefore(DateTime.now())) return;
+  await notificationsPlugin.zonedSchedule(
+    id,
+    'حان وقت $name 🕌',
+    'قومي لصلاة $name - درين - نبروه',
+    tz.TZDateTime.from(time, tz.local),
+    NotificationDetails(android: AndroidNotificationDetails('prayer_channel', 'مواقيت الصلاة', importance: Importance.max, priority: Priority.high)),
+    androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+    uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+  );
+}
 
 class SukoonApp extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'سكون',
-      theme: ThemeData(
-        primaryColor: Color(0xFF4A6741),
-        scaffoldBackgroundColor: Color(0xFFFAF8F5),
-      ),
-      home: HomeScreen(),
-    );
-  }
+  @override Widget build(BuildContext context) => MaterialApp(debugShowCheckedModeBanner: false, home: HomeScreen());
 }
 
-class HomeScreen extends StatefulWidget {
-  @override _HomeScreenState createState() => _HomeScreenState();
-}
+class HomeScreen extends StatefulWidget { @override _HomeScreenState createState() => _HomeScreenState(); }
 class _HomeScreenState extends State<HomeScreen> {
-  int _index = 0;
-  final screens = [TasksPage(), QuranPage(), PrayerPage(), AzkarPage()];
-  @override Widget build(BuildContext context) {
+  int _index=0;
+  final screens=[TasksPage(), QuranPage(), PrayerPage(), AzkarPage(), SalatGuidePage()];
+  @override Widget build(BuildContext context){
     return Scaffold(
       body: screens[_index],
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _index,
-        onTap: (i) => setState(() => _index = i),
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: Color(0xFF4A6741),
-        items: [
-          BottomNavigationBarItem(icon: Icon(Icons.task_alt), label: 'مهامي'),
-          BottomNavigationBarItem(icon: Icon(Icons.menu_book_rounded), label: 'القرآن'),
+        currentIndex: _index, onTap: (i)=> setState(()=> _index=i),
+        type: BottomNavigationBarType.fixed, selectedItemColor: Color(0xFF4A6741),
+        items:[
+          BottomNavigationBarItem(icon: Icon(Icons.check_circle), label: 'مهامي'),
+          BottomNavigationBarItem(icon: Icon(Icons.menu_book), label: 'القرآن'),
           BottomNavigationBarItem(icon: Icon(Icons.mosque), label: 'الصلاة'),
-          BottomNavigationBarItem(icon: Icon(Icons.self_improvement), label: 'أذكاري'),
-        ],
-      ),
+          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'أذكاري'),
+          BottomNavigationBarItem(icon: Icon(Icons.school), label: 'تعلمي'),
+        ]),
     );
   }
 }
 
-// مهام
 class TasksPage extends StatefulWidget { @override _TasksPageState createState() => _TasksPageState(); }
 class _TasksPageState extends State<TasksPage> {
-  List tasks = []; TextEditingController c = TextEditingController();
+  List tasks=[]; TextEditingController c=TextEditingController();
   @override void initState(){ super.initState(); load(); }
   load() async { var p=await SharedPreferences.getInstance(); setState(()=> tasks=jsonDecode(p.getString('tasks')??'[]')); }
   save() async { var p=await SharedPreferences.getInstance(); p.setString('tasks', jsonEncode(tasks)); }
   @override Widget build(BuildContext context){
     return Scaffold(
-      appBar: AppBar(title: Text('سكون - مهامي'), backgroundColor: Color(0xFF4A6741)),
+      appBar: AppBar(title: Text('اكتبي مهامك'), backgroundColor: Color(0xFF4A6741)),
       body: Column(children:[
-        Padding(padding: EdgeInsets.all(12), child: Row(children:[
-          Expanded(child: TextField(controller:c, decoration: InputDecoration(hintText:'اكتبي مهمة جديدة...', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
-          SizedBox(width:8),
-          ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF4A6741)), onPressed: (){ if(c.text.isNotEmpty){ setState(()=> tasks.add({'title':c.text,'done':false})); c.clear(); save(); } }, child: Icon(Icons.add))
-        ])),
-        Expanded(child: ListView.builder(itemCount: tasks.length, itemBuilder: (ctx,i)=> Card(child: CheckboxListTile(value: tasks[i]['done'], title: Text(tasks[i]['title']), onChanged: (v){ setState(()=> tasks[i]['done']=v); save(); }))))
+        Padding(padding: EdgeInsets.all(12), child: Row(children:[Expanded(child: TextField(controller:c, decoration: InputDecoration(hintText:'مهمة جديدة...', border: OutlineInputBorder()))), SizedBox(width:8), ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF4A6741)), onPressed: (){ if(c.text.isNotEmpty){ setState(()=> tasks.add({'title':c.text,'done':false})); c.clear(); save(); } }, child: Text('اضافة'))])),
+        Expanded(child: ListView.builder(itemCount: tasks.length, itemBuilder: (ctx,i)=> Card(child: CheckboxListTile(value: tasks[i]['done'], title: Text(tasks[i]['title']), onChanged: (v){ setState(()=> tasks[i]['done']=v); save(); }, secondary: IconButton(icon: Icon(Icons.delete), onPressed: (){ setState(()=> tasks.removeAt(i)); save(); }))))
       ]),
     );
   }
 }
 
-// قرآن - بصوت مشاري العفاسي العذب
 class QuranPage extends StatefulWidget { @override _QuranPageState createState() => _QuranPageState(); }
 class _QuranPageState extends State<QuranPage> {
-  final player = AudioPlayer();
-  int? playing; bool loading=false;
-  final surahs = [
-    {'id':'001','name':'الفاتحة'}, {'id':'002','name':'البقرة'}, {'id':'003','name':'آل عمران'},
-    {'id':'036','name':'يس'}, {'id':'055','name':'الرحمن'}, {'id':'056','name':'الواقعة'},
-    {'id':'067','name':'الملك'}, {'id':'018','name':'الكهف'}, {'id':'019','name':'مريم'},
-    {'id':'020','name':'طه'}, {'id':'044','name':'الدخان'}, {'id':'078','name':'النبأ'},
-    {'id':'112','name':'الإخلاص'}, {'id':'113','name':'الفلق'}, {'id':'114','name':'الناس'},
-  ];
-  play(String id, int index) async {
-    setState(()=> loading=true);
-    try{
-      String url = 'https://server8.mp3quran.net/afs/$id.mp3';
-      await player.setUrl(url);
-      await player.play();
-      setState(()=> playing=index);
-    }catch(e){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ في التشغيل'))); }
-    setState(()=> loading=false);
-  }
-  @override void dispose(){ player.dispose(); super.dispose(); }
+  final player=AudioPlayer(); int? playing; String selectedReciter='mishaari_raashid_al-afasy';
+  final reciters={'mishaari_raashid_al-afasy':'مشاري العفاسي - عذب','maher_al_muaiqly':'ماهر المعيقلي - خاشع','abdurrahmaan_as_sudais':'السديس - مريح','sa3d_al-ghaamidi':'سعد الغامدي - جميل'};
+  final surahs=[{'id':'001','name':'الفاتحة'},{'id':'002','name':'البقرة'},{'id':'018','name':'الكهف'},{'id':'036','name':'يس'},{'id':'055','name':'الرحمن'},{'id':'056','name':'الواقعة'},{'id':'067','name':'الملك'},{'id':'112','name':'الإخلاص'},{'id':'113','name':'الفلق'},{'id':'114','name':'الناس'}];
   @override Widget build(BuildContext context){
     return Scaffold(
-      appBar: AppBar(title: Text('القرآن - مشاري العفاسي'), backgroundColor: Color(0xFF4A6741)),
+      appBar: AppBar(title: Text('القرآن - 4 شيوخ عذبة'), backgroundColor: Color(0xFF4A6741)),
       body: Column(children:[
-        Container(padding: EdgeInsets.all(12), color: Color(0xFFE8F5E9), child: Row(children:[Icon(Icons.info, color: Colors.green), SizedBox(width:8), Expanded(child: Text('اضغطي على السورة للاستماع بصوت عذب', style: TextStyle(fontSize:13)))])),
+        Padding(padding: EdgeInsets.all(8), child: DropdownButtonFormField<String>(value: selectedReciter, decoration: InputDecoration(labelText:'اختاري القارئ', border: OutlineInputBorder()), items: reciters.entries.map((e)=> DropdownMenuItem(value:e.key, child: Text(e.value))).toList(), onChanged: (v){ setState(()=> selectedReciter=v!); player.stop(); playing=null; })),
         Expanded(child: ListView.builder(itemCount: surahs.length, itemBuilder: (ctx,i){
-          bool isPlay = playing==i;
-          return Card(margin: EdgeInsets.symmetric(horizontal:12, vertical:4), child: ListTile(
-            leading: CircleAvatar(backgroundColor: Color(0xFF4A6741), child: Text(surahs[i]['id']!, style: TextStyle(color:Colors.white, fontSize:12))),
-            title: Text(surahs[i]['name']!, style: TextStyle(fontSize:18, fontWeight: FontWeight.bold)),
-            subtitle: Text(isPlay? 'يتم التشغيل الآن...' : 'العفاسي - صوت عذب خاشع'),
-            trailing: loading && !isPlay ? CircularProgressIndicator() : Icon(isPlay? Icons.stop_circle : Icons.play_circle_fill, color: Color(0xFF4A6741), size:36),
-            onTap: () async {
-              if(isPlay){ await player.stop(); setState(()=> playing=null); }
-              else{ await play(surahs[i]['id']!, i); }
-            },
-          ));
+          bool isPlay=playing==i;
+          return Card(child: ListTile(leading: CircleAvatar(backgroundColor: Color(0xFF4A6741), child: Text(surahs[i]['id']!, style:TextStyle(color:Colors.white, fontSize:10))), title: Text(surahs[i]['name']!, style: TextStyle(fontWeight: FontWeight.bold)), subtitle: Text(reciters[selectedReciter]!), trailing: Icon(isPlay?Icons.stop_circle:Icons.play_circle_fill, size:38, color: Color(0xFF4A6741)),
+            onTap: () async { try{ if(isPlay){ await player.stop(); setState(()=> playing=null); } else{ String url='https://download.quranicaudio.com/quran/$selectedReciter/${surahs[i]['id']}.mp3'; await player.setUrl(url); await player.play(); setState(()=> playing=i); } }catch(e){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('شغلي النت'))); } }));
         }))
       ]),
     );
   }
 }
 
-// صلاة - بالتوقيت الحالي
 class PrayerPage extends StatefulWidget { @override _PrayerPageState createState() => _PrayerPageState(); }
 class _PrayerPageState extends State<PrayerPage> {
-  PrayerTimes? times; String status='جاري تحديد موقع بدر، البحيرة...'; String nextPrayer='';
+  PrayerTimes? times; String status='جاري التحديد...'; String next='';
   @override void initState(){ super.initState(); getTimes(); }
   getTimes() async {
     try{
-      LocationPermission perm = await Geolocator.checkPermission();
-      if(perm==LocationPermission.denied) perm = await Geolocator.requestPermission();
-      if(perm==LocationPermission.deniedForever){ setState(()=> status='فعلي الموقع من الإعدادات'); return; }
-      Position pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-      final coords = Coordinates(pos.latitude, pos.longitude);
-      final params = CalculationMethod.egyptian.getParameters();
-      params.madhab = Madhab.shafi;
-      final date = DateComponents.from(DateTime.now());
-      final t = PrayerTimes(coords, date, params);
-      String next = '';
-      DateTime now = DateTime.now();
-      if(now.isBefore(t.fajr)) next='القادمة: الفجر'; else if(now.isBefore(t.dhuhr)) next='القادمة: الظهر'; else if(now.isBefore(t.asr)) next='القادمة: العصر'; else if(now.isBefore(t.maghrib)) next='القادمة: المغرب'; else if(now.isBefore(t.isha)) next='القادمة: العشاء'; else next='القادمة: الفجر غداً';
-      setState(()=> {times=t, status='بدر - البحيرة 📍', nextPrayer=next});
-    }catch(e){ setState(()=> status='خطأ: $e'); }
+      await Permission.notification.request();
+      await Permission.location.request();
+      Position pos=await Geolocator.getCurrentPosition();
+      final coords=Coordinates(pos.latitude, pos.longitude);
+      final params=CalculationMethod.egyptian.getParameters(); params.madhab=Madhab.shafi;
+      final t=PrayerTimes(coords, DateComponents.from(DateTime.now()), params);
+      await notificationsPlugin.cancelAll();
+      await schedulePrayerNotification(t.fajr, 'الفجر', 1);
+      await schedulePrayerNotification(t.dhuhr, 'الظهر', 2);
+      await schedulePrayerNotification(t.asr, 'العصر', 3);
+      await schedulePrayerNotification(t.maghrib, 'المغرب', 4);
+      await schedulePrayerNotification(t.isha, 'العشاء', 5);
+      DateTime now=DateTime.now(); String n= now.isBefore(t.fajr)?'القادمة: الفجر': now.isBefore(t.dhuhr)?'القادمة: الظهر': now.isBefore(t.asr)?'القادمة: العصر': now.isBefore(t.maghrib)?'القادمة: المغرب': now.isBefore(t.isha)?'القادمة: العشاء':'القادمة: فجر الغد';
+      setState(()=> {times=t, status='درين - نبروه 📍 تم تفعيل الإشعارات', next=n});
+    }catch(e){ setState(()=> status='شغلي الـ GPS والنت: $e'); }
   }
   @override Widget build(BuildContext context){
-    if(times==null) return Scaffold(appBar: AppBar(title: Text('مواقيت الصلاة'), backgroundColor: Color(0xFF4A6741)), body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children:[CircularProgressIndicator(), SizedBox(height:12), Text(status)])));
-    return Scaffold(
-      appBar: AppBar(title: Text('مواقيت الصلاة'), backgroundColor: Color(0xFF4A6741), actions:[IconButton(icon:Icon(Icons.refresh), onPressed: getTimes)]),
+    if(times==null) return Scaffold(appBar: AppBar(title: Text('الصلاة'), backgroundColor: Color(0xFF4A6741)), body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children:[CircularProgressIndicator(), SizedBox(height:12), Text(status, textAlign: TextAlign.center), ElevatedButton(onPressed: getTimes, child: Text('إعادة المحاولة'))])));
+    return Scaffold(appBar: AppBar(title: Text('مواقيت الصلاة'), backgroundColor: Color(0xFF4A6741), actions:[IconButton(icon:Icon(Icons.refresh), onPressed: getTimes)]),
       body: Padding(padding: EdgeInsets.all(16), child: Column(children:[
-        Card(color: Color(0xFF4A6741), child: Padding(padding: EdgeInsets.all(16), child: Column(children:[Text(status, style: TextStyle(color:Colors.white)), SizedBox(height:8), Text(nextPrayer, style: TextStyle(color:Colors.white70, fontSize:20, fontWeight: FontWeight.bold)), Text(DateFormat('EEEE - d MMMM yyyy','ar').format(DateTime.now()), style: TextStyle(color:Colors.white60))]))),
+        Card(color: Color(0xFF4A6741), child: Padding(padding: EdgeInsets.all(16), child: Column(children:[Text(status, style: TextStyle(color:Colors.white)), SizedBox(height:8), Text(next, style: TextStyle(color:Colors.white, fontSize:20, fontWeight: FontWeight.bold)), SizedBox(height:8), Text('سيصلك إشعار عند كل صلاة', style: TextStyle(color:Colors.white70))]))),
         SizedBox(height:12),
-        Expanded(child: ListView(children:[
-          for(var e in [['الفجر', times!.fajr, Icons.nights_stay], ['الشروق', times!.sunrise, Icons.wb_sunny], ['الظهر', times!.dhuhr, Icons.light_mode], ['العصر', times!.asr, Icons.wb_twilight], ['المغرب', times!.maghrib, Icons.nightlight], ['العشاء', times!.isha, Icons.dark_mode]])
-            Card(child: ListTile(leading: Icon(e[2] as IconData, color: Color(0xFF4A6741)), title: Text(e[0] as String, style: TextStyle(fontWeight: FontWeight.bold)), trailing: Text(DateFormat.jm().format(e[1] as DateTime), style: TextStyle(fontSize:18, fontWeight: FontWeight.bold)))),
-        ]))
+        Expanded(child: ListView(children:[for(var e in [['الفجر', times!.fajr], ['الظهر', times!.dhuhr], ['العصر', times!.asr], ['المغرب', times!.maghrib], ['العشاء', times!.isha]]) Card(child: ListTile(title: Text(e[0] as String, style: TextStyle(fontWeight: FontWeight.bold)), trailing: Text(DateFormat.jm().format(e[1] as DateTime), style: TextStyle(fontSize:18))))]))
       ])),
     );
   }
 }
 
-// اذكار كاملة صحيحة
 class AzkarPage extends StatefulWidget { @override _AzkarPageState createState() => _AzkarPageState(); }
 class _AzkarPageState extends State<AzkarPage> {
-  int cat = 0;
-  final cats = ['الصباح','المساء','النوم','بعد الصلاة'];
-  final Map<String, List<Map<String,dynamic>>> data = {
-    'الصباح': [
-      {'text':'أعوذ بالله من الشيطان الرجيم {الله لا إله إلا هو الحي القيوم}','count':1},
-      {'text':'بسم الله الرحمن الرحيم {قل هو الله أحد} - {قل أعوذ برب الفلق} - {قل أعوذ برب الناس} (3 مرات)','count':3},
-      {'text':'أصبحنا وأصبح الملك لله والحمد لله','count':1},
-      {'text':'اللهم بك أصبحنا وبك أمسينا وبك نحيا وبك نموت وإليك النشور','count':1},
-      {'text':'اللهم أنت ربي لا إله إلا أنت خلقتني وأنا عبدك','count':1},
-      {'text':'سبحان الله وبحمده (100 مرة)','count':100},
+  int cat=0; final cats=['الصباح','المساء','النوم','بعد الصلاة'];
+  final data={
+    'الصباح':[
+      {'text':'اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ ۚ لَا تَأْخُذُهُ سِنَةٌ وَلَا نَوْمٌ ۚ لَّهُ مَا فِي السَّمَاوَاتِ وَمَا فِي الْأَرْضِ ۗ مَن ذَا الَّذِي يَشْفَعُ عِندَهُ إِلَّا بِإِذْنِهِ ۚ يَعْلَمُ مَا بَيْنَ أَيْدِيهِمْ وَمَا خَلْفَهُمْ ۖ وَلَا يُحِيطُونَ بِشَيْءٍ مِّنْ عِلْمِهِ إِلَّا بِمَا شَاءَ ۚ وَسِعَ كُرْسِيُّهُ السَّمَاوَاتِ وَالْأَرْضَ ۖ وَلَا يَئُودُهُ حِفْظُهُمَا ۚ وَهُوَ الْعَلِيُّ الْعَظِيمُ (آية الكرسي كاملة)','count':1},
+      {'text':'أصبحنا وأصبح الملك لله والحمد لله لا إله إلا الله وحده لا شريك له','count':1},
+      {'text':'سيد الاستغفار: اللهم أنت ربي لا إله إلا أنت خلقتني وأنا عبدك وأنا على عهدك ووعدك ما استطعت أعوذ بك من شر ما صنعت أبوء لك بنعمتك علي وأبوء بذنبي فاغفر لي','count':1},
+      {'text':'بسم الله الذي لا يضر مع اسمه شيء في الأرض ولا في السماء وهو السميع العليم (3 مرات)','count':3},
     ],
-    'المساء': [
-      {'text':'أمسينا وأمسى الملك لله والحمد لله','count':1},
-      {'text':'اللهم بك أمسينا وبك أصبحنا وبك نحيا وبك نموت وإليك المصير','count':1},
-      {'text':'أعوذ بكلمات الله التامات من شر ما خلق (3 مرات)','count':3},
-      {'text':'بسم الله الذي لا يضر مع اسمه شيء في الأرض ولا في السماء (3 مرات)','count':3},
-      {'text':'رضيت بالله ربا وبالإسلام دينا وبمحمد ﷺ نبيا (3 مرات)','count':3},
+    'المساء':[
+      {'text':'آية الكرسي كاملة: اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ ... إلى العلي العظيم','count':1},
+      {'text':'أمسينا وأمسى الملك لله','count':1},
+      {'text':'أعوذ بكلمات الله التامات من شر ما خلق (3)','count':3},
+      {'text':'حسبي الله لا إله إلا هو عليه توكلت وهو رب العرش العظيم (7)','count':7},
     ],
-    'النوم': [
+    'النوم':[
       {'text':'باسمك ربي وضعت جنبي وبك أرفعه','count':1},
-      {'text':'اللهم قني عذابك يوم تبعث عبادك (3 مرات)','count':3},
-      {'text':'سبحان الله 33 - الحمد لله 33 - الله أكبر 34','count':1},
-      {'text':'آية الكرسي','count':1},
+      {'text':'باسمك اللهم أموت وأحيا','count':1},
+      {'text':'آية الكرسي كاملة قبل النوم','count':1},
+      {'text':'سبحان الله 33 الحمد لله 33 الله أكبر 34','count':1},
     ],
-    'بعد الصلاة': [
-      {'text':'أستغفر الله (3 مرات)','count':3},
-      {'text':'اللهم أنت السلام ومنك السلام تباركت يا ذا الجلال والإكرام','count':1},
-      {'text':'لا إله إلا الله وحده لا شريك له له الملك وله الحمد وهو على كل شيء قدير','count':1},
-      {'text':'سبحان الله 33، الحمد لله 33، الله أكبر 33، ثم تمام المائة: لا إله إلا الله','count':1},
+    'بعد الصلاة':[
+      {'text':'أستغفر الله 3 - اللهم أنت السلام ومنك السلام','count':1},
+      {'text':'آية الكرسي بعد كل صلاة','count':1},
+      {'text':'سبحان الله 33 الحمد لله 33 الله أكبر 33 وتختم لا إله إلا الله وحده لا شريك له','count':1},
     ]
   };
   Map<String,int> counters={};
   @override Widget build(BuildContext context){
-    String currentCat = cats[cat];
-    var list = data[currentCat]!;
+    String current=cats[cat]; var list=data[current]!;
     return Scaffold(
-      appBar: AppBar(title: Text('أذكاري الصحيحة'), backgroundColor: Color(0xFF4A6741)),
+      appBar: AppBar(title: Text('الأذكار كاملة'), backgroundColor: Color(0xFF4A6741)),
       body: Column(children:[
         Container(height:50, child: ListView.builder(scrollDirection: Axis.horizontal, itemCount: cats.length, itemBuilder: (ctx,i)=> Padding(padding: EdgeInsets.all(6), child: ChoiceChip(label: Text(cats[i]), selected: cat==i, onSelected: (v)=> setState(()=> cat=i))))),
         Expanded(child: ListView.builder(itemCount: list.length, itemBuilder: (ctx,i){
-          String key = '$currentCat-$i';
-          int c = counters[key] ?? 0;
-          int target = list[i]['count'];
-          double prog = target>0 ? (c/target).clamp(0,1) : 0;
-          return Card(margin: EdgeInsets.all(8), child: Padding(padding: EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
-            Text(list[i]['text'], style: TextStyle(fontSize:18, height:1.6)),
-            SizedBox(height:10),
-            LinearProgressIndicator(value: prog.toDouble(), backgroundColor: Colors.grey[200], color: Color(0xFF4A6741)),
-            SizedBox(height:8),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[
-              Text('$c / $target', style: TextStyle(fontWeight: FontWeight.bold)),
-              ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF4A6741)), onPressed: (){ setState(()=> counters[key]=c+1); if(c+1>=target) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('أحسنتي! ✅'))); }, child: Text('تسبيح'))
-            ])
-          ])));
+          String key='$current-$i'; int c=counters[key]??0; int target=list[i]['count'];
+          return Card(margin: EdgeInsets.all(8), child: Padding(padding: EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[Text(list[i]['text'], style: TextStyle(fontSize:17, height:1.8)), SizedBox(height:10), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[Text('$c / $target'), ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF4A6741)), onPressed: (){ setState(()=> counters[key]=c+1); }, child: Text('تسبيح'))])])));
         }))
+      ]),
+    );
+  }
+}
+
+class SalatGuidePage extends StatelessWidget {
+  @override Widget build(BuildContext context){
+    return Scaffold(
+      appBar: AppBar(title: Text('تعلمي الصلاة والوضوء'), backgroundColor: Color(0xFF4A6741)),
+      body: ListView(children:[
+        ExpansionTile(title: Text('الوضوء خطوة بخطوة', style: TextStyle(fontWeight: FontWeight.bold)), children:[ListTile(title: Text('1- النية 2- بسم الله 3- غسل الكفين 3 مرات 4- المضمضة 3 5- الاستنشاق 3 6- غسل الوجه 3 7- اليدين للمرفقين 3 8- مسح الرأس 9- مسح الأذنين 10- غسل الرجلين للكعبين 3\nالدعاء: أشهد أن لا إله إلا الله وأشهد أن محمد عبده ورسوله اللهم اجعلني من التوابين', style: TextStyle(height:1.6)))]),
+        ExpansionTile(title: Text('ما يقال في الصلاة', style: TextStyle(fontWeight: FontWeight.bold)), children:[ListTile(title: Text('تكبيرة الإحرام: الله أكبر\nدعاء الاستفتاح: سبحانك اللهم وبحمدك\nالفاتحة + سورة قصيرة\nالركوع: سبحان ربي العظيم 3\nسمع الله لمن حمده ربنا ولك الحمد\nالسجود: سبحان ربي الأعلى 3\nبين السجدتين: رب اغفر لي\nالتشهد + الصلاة الإبراهيمية + التسليم', style: TextStyle(height:1.7)))]),
+        ExpansionTile(title: Text('الفروض والسنن', style: TextStyle(fontWeight: FontWeight.bold)), children:[ListTile(title: Text('الفجر 2 - الظهر 4 - العصر 4 - المغرب 3 - العشاء 4\nالسنن: 2 قبل الفجر - 4 قبل الظهر و2 بعده - 2 بعد المغرب - 2 بعد العشاء - الوتر 1 أو 3', style: TextStyle(height:1.6)))]),
       ]),
     );
   }
