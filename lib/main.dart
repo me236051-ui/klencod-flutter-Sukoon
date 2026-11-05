@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tzdata;
-import 'package:permission_handler/permission_handler.dart';
 import 'dart:convert';
 
 final FlutterLocalNotificationsPlugin notificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -25,7 +24,7 @@ Future<void> schedulePrayerNotification(DateTime time, String name, int id) asyn
   await notificationsPlugin.zonedSchedule(
     id,
     'حان وقت $name 🕌',
-    'قومي لصلاة $name - درين نبروه',
+    'قومي لصلاة $name',
     tz.TZDateTime.from(time, tz.local),
     const NotificationDetails(android: AndroidNotificationDetails('prayer_channel', 'مواقيت الصلاة', importance: Importance.max, priority: Priority.high)),
     androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -35,9 +34,7 @@ Future<void> schedulePrayerNotification(DateTime time, String name, int id) asyn
 
 class SukoonApp extends StatelessWidget {
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(debugShowCheckedModeBanner: false, home: HomeScreen());
-  }
+  Widget build(BuildContext context) => MaterialApp(debugShowCheckedModeBanner: false, home: HomeScreen());
 }
 
 class HomeScreen extends StatefulWidget { @override _HomeScreenState createState() => _HomeScreenState(); }
@@ -90,7 +87,7 @@ class _QuranPageState extends State<QuranPage> {
         Padding(padding: const EdgeInsets.all(8), child: DropdownButtonFormField<String>(value: selectedReciter, decoration: const InputDecoration(labelText:'اختاري القارئ', border: OutlineInputBorder()), items: reciters.entries.map((e)=> DropdownMenuItem(value:e.key, child: Text(e.value))).toList(), onChanged: (v){ setState((){ selectedReciter=v!; }); player.stop(); playing=null; })),
         Expanded(child: ListView.builder(itemCount: surahs.length, itemBuilder: (ctx,i){
           bool isPlay=playing==i;
-          return Card(child: ListTile(leading: CircleAvatar(backgroundColor: const Color(0xFF4A6741), child: Text(surahs[i]['id']!, style: const TextStyle(color:Colors.white, fontSize:10))), title: Text(surahs[i]['name']!, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text(reciters[selectedReciter]!), trailing: Icon(isPlay?Icons.stop_circle:Icons.play_circle_fill, size:38, color: const Color(0xFF4A6741)),
+          return Card(child: ListTile(leading: CircleAvatar(backgroundColor: const Color(0xFF4A6741), child: Text(surahs[i]['id']!, style: const TextStyle(color:Colors.white, fontSize:10))), title: Text(surahs[i]['name']!, style: const TextStyle(fontWeight: FontWeight.bold)), trailing: Icon(isPlay?Icons.stop_circle:Icons.play_circle_fill, size:38, color: const Color(0xFF4A6741)),
             onTap: () async { try{ if(isPlay){ await player.stop(); setState((){ playing=null; }); } else{ String url='https://download.quranicaudio.com/quran/$selectedReciter/${surahs[i]['id']}.mp3'; await player.setUrl(url); await player.play(); setState((){ playing=i; }); } }catch(e){ ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('شغلي النت'))); } }));
         }))
       ]),
@@ -104,8 +101,7 @@ class _PrayerPageState extends State<PrayerPage> {
   @override void initState(){ super.initState(); getTimes(); }
   getTimes() async {
     try{
-      await Permission.notification.request();
-      await Permission.location.request();
+      LocationPermission perm = await Geolocator.requestPermission();
       Position pos=await Geolocator.getCurrentPosition();
       final coords=Coordinates(pos.latitude, pos.longitude);
       final params=CalculationMethod.egyptian.getParameters(); params.madhab=Madhab.shafi;
@@ -143,8 +139,8 @@ class AzkarPage extends StatefulWidget { @override _AzkarPageState createState()
 class _AzkarPageState extends State<AzkarPage> {
   int cat=0; final cats=['الصباح','المساء','النوم','بعد الصلاة'];
   final data={
-    'الصباح':[{'text':'آية الكرسي','count':1},{'text':'أصبحنا وأصبح الملك لله','count':1},{'text':'سيد الاستغفار','count':1}],
-    'المساء':[{'text':'آية الكرسي','count':1},{'text':'أمسينا وأمسى الملك لله','count':1},{'text':'حسبي الله 7','count':7}],
+    'الصباح':[{'text':'آية الكرسي','count':1},{'text':'أصبحنا وأصبح الملك لله','count':1}],
+    'المساء':[{'text':'آية الكرسي','count':1},{'text':'أمسينا وأمسى الملك لله','count':1}],
     'النوم':[{'text':'باسمك ربي وضعت جنبي','count':1}],
     'بعد الصلاة':[{'text':'أستغفر الله 3','count':1}]
   };
