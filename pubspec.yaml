@@ -1,5 +1,5 @@
 name: sukoon
-description: سكون
+description: تطبيق سكون
 publish_to: 'none'
 version: 1.0.0+1
 environment:
