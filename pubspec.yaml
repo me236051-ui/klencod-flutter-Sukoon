@@ -1,5 +1,5 @@
 name: sukoon
-description: تطبيق سكون - مهامي وصلاتي وقرآني
+description: سكون
 publish_to: 'none'
 version: 1.0.0+1
 environment:
@@ -8,11 +8,8 @@ dependencies:
   flutter:
     sdk: flutter
   shared_preferences: any
-  just_audio: any
-  adhan: any
   geolocator: any
+  adhan: any
   intl: any
-  flutter_local_notifications: any
-  timezone: any
 flutter:
   uses-material-design: true
